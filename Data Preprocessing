@@ -1,0 +1,74 @@
+#Imports
+import tensorflow as tf
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+import numpy as np
+import pandas as pd
+import pickle
+import os
+
+
+#DATA
+from google.colab import drive
+drive.mount('/content/drive')
+
+np.random.seed(0)
+r = np.random.randint(500)
+df_label = pd.read_csv('/content/drive/My Drive/EpICC/labels.csv',header=1)
+label = list(df_label['Abbreviation'])
+df_analysis = pd.read_csv('/content/drive/My Drive/EpICC/sample_num.csv')
+sample_numbers = list(df_analysis.iloc[1:,1])
+analysis_type = 'all_cancer_types'
+cancer_types = ['LAML','ACC','BLCA','LGG','BRCA','CESC','CHOL','COAD','UCEC','ESCA','GBM','HNSC','KIRC','KIRP','LIHC','LUAD','LUSC','DLBC','MESO','OV','PAAD','PCPG','PRAD','READ','SKCM','STAD','TGCT','THYM','THCA','UCS','UVM']
+df_pca2 = pd.read_csv('/content/drive/My Drive/EpICC/100_genes_pca2_new.csv')
+
+
+
+# Explore
+# Check if each column is normalized
+is_normalized = all(
+    (df_pca2[col] >= 0).all() and (df_pca2[col] <= 1).all()  # Assuming min-max normalization
+    for col in df_pca2.columns
+)
+
+if is_normalized:
+    print("The dataframe is normalized.")
+else:
+    print("The dataframe is not normalized.")
+
+# Calculate the correlation matrix
+correlation_matrix = df_pca2.corr()
+
+# Find the column with the least correlation with other columns
+least_correlated_column = correlation_matrix.sum().idxmin()
+print(f"The column with the least correlation is: {least_correlated_column}")
+
+# drop it to make number of feature round for 2d reshape
+df_pca2 = df_pca2.drop(['PLOD3','SLC4A2','PSMA6'] ,axis=1)
+print("['PLOD3','SLC4A2','PSMA6'] are Dropped")
+
+
+#Preprocess
+df_pca2 = df_pca2.astype('float32')
+
+X = df_pca2.iloc[:, :-1]
+y = df_pca2.iloc[:, -1]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+X_test, X_val, y_test, y_val = train_test_split(X_test, y_test, test_size=0.5, random_state=42)
+
+# Normalization
+scaler = StandardScaler()
+scaler.fit(X_train)
+# X_train_scaled = scaler.transform(X_train)
+# X_test_scaled = scaler.transform(X_test)
+# X_val_scaled = scaler.transform(X_val)
+
+X_train = tf.convert_to_tensor(scaler.transform(X_train))
+X_val= tf.convert_to_tensor(scaler.transform(X_val))
+X_test= tf.convert_to_tensor(scaler.transform(X_test))
+
+# one-hot encode
+y_train_oh = tf.keras.utils.to_categorical(y_train)
+y_test_oh = tf.keras.utils.to_categorical(y_test)
+y_val_oh = tf.keras.utils.to_categorical(y_val)
+
