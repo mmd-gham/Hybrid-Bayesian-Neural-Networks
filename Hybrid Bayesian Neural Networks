@@ -211,7 +211,7 @@ def get_dense_variational_layer(prior_fn, posterior_fn, kl_weight):
 
 
 #Model
-bayesian_model = Sequential([
+hybrid_model = Sequential([
     InputLayer(input_shape=(1000,)),
     Dense(256, activation='swish', bias_regularizer=regularizers.L2(1e-4)),
     Dense(128, activation='swish', bias_regularizer=regularizers.L2(1e-4)),
@@ -228,12 +228,12 @@ bayesian_model = Sequential([
 ])
 
 
-bayesian_model.compile(loss=nll,
+hybrid_model.compile(loss=nll,
               optimizer= Adam(0.0001),
               metrics=['accuracy'],
               experimental_run_tf_function=False)
 
-bayesian_model.summary()
+hybrid_model.summary()
 
 
 
@@ -248,7 +248,7 @@ tensorboard_callback = TensorBoard(log_dir=log_dir, histogram_freq=1, profile_ba
 
 #Training
 start_time = time.time()
-history = bayesian_model.fit(X_train, y_train_oh,
+history = hybrid_model.fit(X_train, y_train_oh,
                     epochs=200,
                     batch_size=32,
                     validation_data=(X_val, y_val_oh),
@@ -263,7 +263,6 @@ print(f"Training time: {training_time:.2f} seconds")
 # Plot the training and validation curves
 plt.plot(history.history['accuracy'], label='accuracy')
 plt.plot(history.history['val_accuracy'], label = 'val_accuracy')
-plt.title("Normal Posterior")
 plt.xlabel('Epoch')
 plt.ylabel('Accuracy')
 plt.legend(loc='lower right')
