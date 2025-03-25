@@ -1,0 +1,316 @@
+import tensorflow as tf
+import tensorflow_probability as tfp
+from tf_keras.models import Sequential, Model
+from tf_keras.layers import Dense, Flatten, LayerNormalization, InputLayer
+from tf_keras.losses import SparseCategoricalCrossentropy
+from tf_keras.callbacks import TensorBoard, EarlyStopping
+from tf_keras.optimizers import Adam
+from tf_keras import regularizers
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import recall_score, precision_score, f1_score, accuracy_score
+
+import numpy as np
+import pandas as pd
+import pickle
+import os
+import time
+import matplotlib.pyplot as plt
+from imblearn.over_sampling import KMeansSMOTE
+from ast import Return
+import datetime
+import random
+import seaborn as sns
+
+tfd = tfp.distributions
+tfpl = tfp.layers
+print(f"TensorFlow version: {tf.__version__}") 
+print(f"TensorFlow Probatility version: {tfp.__version__}") 
+
+
+
+
+
+from google.colab import drive
+drive.mount('/content/drive')
+df_analysis = pd.read_csv('/content/drive/My Drive/EpICC/sample_num.csv')
+df_rf_cancer = pd.read_csv('/content/drive/MyDrive/Bayesian Model/Supplementary Data/df_rf_cancer.csv')
+
+
+
+
+
+X = df_rf_cancer.iloc[:, :-1]
+y = df_rf_cancer.iloc[:, -1]
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+X_test, X_val, y_test, y_val = train_test_split(X_test, y_test, test_size=0.5, random_state=42)
+
+kmeans_smote = KMeansSMOTE(sampling_strategy='not majority', random_state=42, kmeans_estimator=31)
+X_resampled, y_resampled = kmeans_smote.fit_resample(X_train, y_train)
+
+X_train = X_resampled
+y_train = y_resampled
+
+# Normalization
+scaler = StandardScaler()
+scaler.fit(X_train)
+
+X_train = tf.convert_to_tensor(scaler.transform(X_train))
+X_val= tf.convert_to_tensor(scaler.transform(X_val))
+X_test= tf.convert_to_tensor(scaler.transform(X_test))
+
+# one-hot encode
+y_train_oh = tf.keras.utils.to_categorical(y_train)
+y_test_oh = tf.keras.utils.to_categorical(y_test)
+y_val_oh = tf.keras.utils.to_categorical(y_val)
+
+# Display the shape of the training and testing data
+print("Training shape:", X_train.shape)
+print("Training labels shape:", y_train.shape)
+print("y_train_oh shape:", y_train_oh.shape)
+
+print("Testing shape:", X_test.shape)
+print("Testing labels shape:", y_test.shape)
+print("y_test_oh shape:", y_test_oh.shape)
+
+
+
+
+
+#ELBO
+seed = 0
+np.random.seed(seed)
+random.seed(seed)
+tf.random.set_seed(seed)
+
+def nll(y_true, y_pred):
+    return -y_pred.log_prob(y_true)
+
+divergence_fn = lambda q, p, _ : tfd.kl_divergence(q, p) / X_train.shape[0]
+
+
+
+
+
+#customizable prior and posterior distributions
+def create_dis_prior(name, event_shape):
+    if name == "normal":
+        return tfd.Independent(tfd.Normal(
+            loc=tf.zeros(event_shape),
+            scale=tf.ones(event_shape)), reinterpreted_batch_ndims=1)
+    elif name == "laplace":
+        return tfd.Independent(tfd.Laplace(
+            loc=tf.zeros(event_shape),
+            scale=tf.ones(event_shape)), reinterpreted_batch_ndims=1)
+    elif name == "log_normal":
+        return tfd.Independent(tfd.LogNormal(
+            loc=tf.zeros(event_shape),
+            scale=tf.ones(event_shape)), reinterpreted_batch_ndims=1)
+    elif name == "spike_and_slab":
+        return tfd.Mixture(
+            cat=tfd.Categorical(probs=[0.5, 0.5]),
+            components=[
+                tfd.Independent(tfd.Normal(
+                    loc=tf.zeros(event_shape),
+                    scale=0.1 * tf.ones(event_shape)), reinterpreted_batch_ndims=1),
+                tfd.Independent(tfd.Normal(
+                    loc=tf.zeros(event_shape),
+                    scale=10.0 * tf.ones(event_shape)), reinterpreted_batch_ndims=1)
+            ])
+    elif name == "dirichlet":
+        return tfd.Independent(tfd.Dirichlet(
+            concentration=tf.ones(event_shape)), reinterpreted_batch_ndims=0)
+    elif name == "exponential":
+        return tfd.Independent(tfd.Exponential(
+            rate=tf.ones(event_shape)), reinterpreted_batch_ndims=1)
+    else:
+        raise ValueError(f"Unknown distribution: {name}")
+
+
+def create_dis_post(distribution_name, n, dtype=tf.float32):
+    if distribution_name == "normal":
+        return Sequential([
+            tfpl.VariableLayer(2 * n, dtype=dtype),
+            tfpl.DistributionLambda(
+                lambda t: tfd.Independent(
+                    tfd.Normal(
+                        loc=t[..., :n],
+                        scale=tf.nn.softplus(t[..., n:]) + 1e-5
+                    ),
+                    reinterpreted_batch_ndims=1
+                )
+            )
+        ])
+
+    elif distribution_name == "laplace":
+        return Sequential([
+            tfpl.VariableLayer(2 * n, dtype=dtype),
+            tfpl.DistributionLambda(
+                lambda t: tfd.Independent(
+                    tfd.Laplace(
+                        loc=t[..., :n],
+                        scale=tf.nn.softplus(t[..., n:]) + 1e-5
+                    ),
+                    reinterpreted_batch_ndims=1
+                )
+            )
+        ])
+
+    elif distribution_name == "log_normal":
+        return Sequential([
+            tfpl.VariableLayer(2 * n, dtype=dtype),
+            tfpl.DistributionLambda(
+                lambda t: tfd.Independent(
+                    tfd.LogNormal(
+                        loc=t[..., :n],
+                        scale=tf.nn.softplus(t[..., n:]) + 1e-5
+                    ),
+                    reinterpreted_batch_ndims=1
+                )
+            )
+        ])
+
+    elif distribution_name == "spike_and_slab":
+        return Sequential([
+            tfpl.VariableLayer(3 * n, dtype=dtype),  # logits, loc, scale
+            tfpl.DistributionLambda(
+                lambda t: tfd.Independent(
+                    tfd.MixtureSameFamily(
+                        mixture_distribution=tfd.Bernoulli(logits=t[..., :n]),
+                        components_distribution=tfd.Normal(
+                            loc=t[..., n:2*n],
+                            scale=tf.nn.softplus(t[..., 2*n:]) + 1e-5
+                        )
+                    ),
+                    reinterpreted_batch_ndims=1
+                )
+            )
+        ])
+
+    elif distribution_name == "dirichlet":
+        return Sequential([
+            tfpl.VariableLayer(n, dtype=dtype),  # concentration parameters
+            tfpl.DistributionLambda(
+                lambda t: tfd.Dirichlet(
+                    concentration=tf.nn.softplus(t) + 1e-5
+                )
+            )
+        ])
+
+    elif distribution_name == "exponential":
+        return Sequential([
+            tfpl.VariableLayer(n, dtype=dtype),  # rate
+            tfpl.DistributionLambda(
+                lambda t: tfd.Independent(
+                    tfd.Exponential(
+                        rate=tf.nn.softplus(t) + 1e-5
+                    ),
+                    reinterpreted_batch_ndims=1
+                )
+            )
+        ])
+
+    else:
+        raise ValueError(f"Unknown distribution: {distribution_name}")
+
+
+
+
+
+#Bayesian layers
+#[normal, laplace, spike_and_slab, dirichlet, exponential, log_normal]
+
+def get_prior(kernel_size, bias_size, dtype=None):
+    n = kernel_size+bias_size
+    prior_model = Sequential([tfpl.DistributionLambda(lambda t : create_dis_prior('exponential', n))])
+    return prior_model
+
+def get_posterior(kernel_size, bias_size, dtype=None):
+    n = kernel_size + bias_size
+    return(create_dis_post('normal', n, dtype))
+
+def get_dense_reparameterization_layer(input_shape, divergence_fn, units):
+    layer = tfpl.DenseReparameterization(
+                input_shape= input_shape, units= units,
+                activation='swish',
+
+                kernel_prior_fn= tfpl.default_mean_field_normal_fn(is_singular=False),
+                kernel_posterior_fn= tfpl.default_mean_field_normal_fn(is_singular=False),
+                kernel_divergence_fn= divergence_fn,
+
+                bias_prior_fn= tfpl.default_mean_field_normal_fn(is_singular=False),
+                bias_posterior_fn= tfpl.default_mean_field_normal_fn(is_singular=False),
+                bias_divergence_fn= divergence_fn
+            )
+    return layer
+
+def get_dense_variational_layer(prior_fn, posterior_fn, kl_weight):
+    return tfpl.DenseVariational(
+        units=31, make_posterior_fn=posterior_fn, make_prior_fn=prior_fn, kl_weight=kl_weight
+    )
+
+
+
+
+
+
+#Model
+bayesian_model = Sequential([
+    InputLayer(input_shape=(1000,)),
+    Dense(256, activation='swish', bias_regularizer=regularizers.L2(1e-4)),
+    Dense(128, activation='swish', bias_regularizer=regularizers.L2(1e-4)),
+    Dense(128, activation='swish', bias_regularizer=regularizers.L2(1e-4)),
+
+    LayerNormalization(epsilon=1e-6),
+    get_dense_reparameterization_layer((1000,), divergence_fn, 64),
+    get_dense_reparameterization_layer((1000,), divergence_fn, 64),
+    Flatten(),
+
+
+    get_dense_variational_layer(get_prior, get_posterior, kl_weight= 1/X_train.shape[0] * 0.5),
+    tfpl.OneHotCategorical(31, convert_to_tensor_fn= tfd.Distribution.mode)
+])
+
+
+bayesian_model.compile(loss=nll,
+              optimizer= Adam(0.0001),
+              metrics=['accuracy'],
+              experimental_run_tf_function=False)
+
+bayesian_model.summary()
+
+
+
+
+
+
+#Train
+# Callbacks
+early_stopping = EarlyStopping(monitor='val_loss', patience=7, restore_best_weights=True)
+log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+tensorboard_callback = TensorBoard(log_dir=log_dir, histogram_freq=1, profile_batch=0)
+
+#Training
+start_time = time.time()
+history = bayesian_model.fit(X_train, y_train_oh,
+                    epochs=200,
+                    batch_size=32,
+                    validation_data=(X_val, y_val_oh),
+                    callbacks=[tensorboard_callback, early_stopping],
+                    verbose=1)
+
+end_time = time.time()
+training_time = end_time - start_time
+print(f"Training time: {training_time:.2f} seconds")
+
+
+# Plot the training and validation curves
+plt.plot(history.history['accuracy'], label='accuracy')
+plt.plot(history.history['val_accuracy'], label = 'val_accuracy')
+plt.title("Normal Posterior")
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.legend(loc='lower right')
+plt.show()
