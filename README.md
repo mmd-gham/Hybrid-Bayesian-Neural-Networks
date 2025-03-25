@@ -7,6 +7,8 @@ Data:
 
 1000 features: https://drive.google.com/file/d/1_aFrfV6ldxosYn5e-xk54UpnPKQv4vtS/view?usp=sharing
 
+
+
 Abstract:
 Deep learning models for cancer detection with gene expression data do not
 quantify the uncertainty. This leads to unreliability in clinical settings where
@@ -19,4 +21,6 @@ certainty having a mean of 1.133 and 0.271 bits for incorrectly and correctly
 labeled, correspondingly. Further, our approach is evaluated with an ablation
 study. Six distributions were benchmarked as our prior and posterior to assess
 their influence on convergence.
+
+
 ![hybrid bayesian model](https://github.com/user-attachments/assets/a94ed0c1-2848-4311-baec-e6dd566675f0)
