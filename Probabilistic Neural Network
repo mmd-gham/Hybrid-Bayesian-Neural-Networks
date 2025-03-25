@@ -1,1 +1,103 @@
+import tensorflow as tf
+import tensorflow_probability as tfp
+from tf_keras.models import Sequential, Model
+from tf_keras.layers import Dense, Flatten, LayerNormalization, InputLayer
+from tf_keras.losses import SparseCategoricalCrossentropy
+from tf_keras.callbacks import TensorBoard, EarlyStopping
+from tf_keras.optimizers import Adam
+from tf_keras import regularizers
 
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import recall_score, precision_score, f1_score, accuracy_score
+
+import numpy as np
+import pandas as pd
+import pickle
+import os
+import time
+import matplotlib.pyplot as plt
+from imblearn.over_sampling import KMeansSMOTE
+from ast import Return
+import datetime
+import random
+import seaborn as sns
+
+tfd = tfp.distributions
+tfpl = tfp.layers
+print(f"TensorFlow version: {tf.__version__}") 
+print(f"TensorFlow Probatility version: {tfp.__version__}") 
+
+
+
+
+
+#ELBO
+seed = 0
+np.random.seed(seed)
+random.seed(seed)
+tf.random.set_seed(seed)
+
+def nll(y_true, y_pred):
+    return -y_pred.log_prob(y_true)
+
+
+
+#Model
+Prob_model = Sequential([
+    InputLayer(input_shape=(1000,)),
+
+    Dense(256, activation='swish', bias_regularizer=regularizers.L2(1e-4)),
+    Dense(128, activation='swish', bias_regularizer=regularizers.L2(1e-4)),
+    Dense(128, activation='swish', bias_regularizer=regularizers.L2(1e-4)),
+
+    LayerNormalization(epsilon=1e-6),
+    Dense(31, activation='swish', bias_regularizer=regularizers.L2(1e-4)),
+
+    tfpl.OneHotCategorical(31, convert_to_tensor_fn= tfd.Distribution.mode)  #Probabilistic Layer 
+])
+
+
+Prob_model.compile(loss=nll,
+              optimizer= Adam(0.0001),
+              metrics=['accuracy'],
+              experimental_run_tf_function=False)
+
+Prob_model.summary()
+
+
+
+
+#Train
+# Callbacks
+early_stopping = EarlyStopping(monitor='val_loss', patience=7, restore_best_weights=True)
+log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+tensorboard_callback = TensorBoard(log_dir=log_dir, histogram_freq=1, profile_batch=0)
+
+#Training
+start_time = time.time()
+history = Prob_model.fit(X_train, y_train_oh,
+                    epochs=200,
+                    batch_size=32,
+                    validation_data=(X_val, y_val_oh),
+                    callbacks=[tensorboard_callback, early_stopping],
+                    verbose=1)
+
+end_time = time.time()
+training_time = end_time - start_time
+print(f"Training time: {training_time:.2f} seconds")
+
+
+
+
+# Plot the training and validation curves
+plt.plot(history.history['accuracy'], label='accuracy')
+plt.plot(history.history['val_accuracy'], label = 'val_accuracy')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.legend(loc='lower right')
+plt.show()
+
+
+%load_ext tensorboard
+%tensorboard --logdir logs/fit
