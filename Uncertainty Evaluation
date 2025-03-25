@@ -1,0 +1,107 @@
+def get_correct_indices(preds, labels):
+
+    predicted_labels = np.argmax(preds, axis=1) 
+    if labels.ndim > 1:
+        labels = np.argmax(labels, axis=1)  
+
+    correct = predicted_labels == labels
+    correct_indices = np.where(correct)[0]
+    incorrect_indices = np.where(~correct)[0]
+
+    return correct_indices, incorrect_indices
+
+
+
+
+def compute_uncertainties(model, x, num_samples=50):
+    epsilon = 1e-12  
+
+    # Perform multiple stochastic forward passes
+    sampled_predictions = np.array([
+        model(x).mean().numpy() for _ in range(num_samples)
+    ])  # Shape: (num_samples, batch_size, num_classes)
+
+    # Mean prediction over multiple forward passes
+    mean_probs = np.mean(sampled_predictions, axis=0)  # Shape: (batch_size, num_classes)
+
+    # Predictive Entropy (Total Uncertainty)
+    predictive_entropy = -np.sum(mean_probs * np.log2(mean_probs + epsilon), axis=1)  # Shape: (batch_size,)
+
+    # Expected Entropy (Aleatoric Uncertainty)
+    expected_entropy = np.mean(-np.sum(sampled_predictions * np.log2(sampled_predictions + epsilon), axis=2), axis=0)  # Shape: (batch_size,)
+
+    # Mutual Information (Epistemic Uncertainty)
+    mutual_information = predictive_entropy - expected_entropy  # Shape: (batch_size,)
+
+    return predictive_entropy, expected_entropy, mutual_information, mean_probs
+
+
+
+
+def plot_side_by_side_uncertainty(values_correct, values_incorrect, total_samples, title, xlabel, color_correct, color_incorrect, num_bins=20):
+    num_correct = len(values_correct)
+    num_incorrect = len(values_incorrect)
+
+    percentage_correct = (num_correct / total_samples) * 100
+    percentage_incorrect = (num_incorrect / total_samples) * 100
+
+    mean_correct = np.mean(values_correct) if num_correct > 0 else 0.0
+    mean_incorrect = np.mean(values_incorrect) if num_incorrect > 0 else 0.0
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+    categories = {
+        'Correctly Labeled': (values_correct, mean_correct, percentage_correct, color_correct),
+        'Incorrectly Labeled': (values_incorrect, mean_incorrect, percentage_incorrect, color_incorrect)
+    }
+
+    for ax, (category, (values, mean_value, percentage, color)) in zip(axes, categories.items()):
+        num_samples = len(values)
+        weights = np.ones(num_samples) / num_samples if num_samples > 0 else None  # Normalize to probability
+
+        ax.hist(values, bins=num_bins, weights=weights, color=color, edgecolor='black', alpha=0.75)
+        ax.axvline(mean_value, color='black', linestyle='--', linewidth=2, label=f'Mean: {mean_value:.3f} bits')
+
+        ax.set_xlabel(xlabel, fontsize=12)
+        ax.set_ylabel('Probability', fontsize=12)
+        ax.set_title(f"{category}\n({percentage:.1f}% of total)", fontsize=14)
+        ax.legend(fontsize=10)
+
+    plt.tight_layout()
+    plt.show()
+
+
+
+
+def plot_uncertainty_distribution(model, x, labels, num_samples=100, num_bins=20):
+    predictive_entropy, expected_entropy, mutual_information, mean_probs = compute_uncertainties(model, x, num_samples)
+    correct_idx, incorrect_idx = get_correct_indices(mean_probs, labels)
+
+    total_samples = x.shape[0]
+
+    uncertainty_metrics = {
+        "Predictive Entropy (Total Uncertainty)": predictive_entropy,
+        "Expected Entropy (Aleatoric Uncertainty)": expected_entropy,
+        "Mutual Information (Epistemic Uncertainty)": mutual_information
+    }
+
+    colors = {'Correct': '#4daf4a', 'Incorrect': '#e41a1c'}  # Green for correct, red for incorrect
+
+    for metric, values in uncertainty_metrics.items():
+        if "Predictive" in metric:
+            xlabel = "Total Uncertainty (bits)"
+        elif "Expected" in metric:
+            xlabel = "Aleatoric Uncertainty (bits)"
+        elif "Mutual" in metric:
+            xlabel = "Epistemic Uncertainty (bits)"
+        else:
+            xlabel = "Uncertainty (bits)"
+
+        plot_side_by_side_uncertainty(
+            values[correct_idx], values[incorrect_idx], total_samples,
+            metric, xlabel, colors['Correct'], colors['Incorrect'], num_bins
+        )
+
+
+
+plot_uncertainty_distribution(bayesian_model, X_test, y_test, num_samples=50)
