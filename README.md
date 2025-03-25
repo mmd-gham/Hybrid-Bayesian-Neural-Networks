@@ -1,6 +1,7 @@
 ## Hybrid Bayesian Neural Networks: Quantifying Uncertainty in Cancer detection
+<br><br><br>
 
-Data: <br><br><br>
+Data: 
 
 ~20,000 features: https://drive.google.com/file/d/1TH2ahaH7mzR93Mfz635oY46MMN24T-u1/view?usp=sharing
 
@@ -8,9 +9,8 @@ Data: <br><br><br>
 
 1000 features: https://drive.google.com/file/d/1_aFrfV6ldxosYn5e-xk54UpnPKQv4vtS/view?usp=sharing
 
-
-
-Abstract:<br><br><br>
+<br><br><br>
+Abstract:
 
 Deep learning models for cancer detection with gene expression data do not
 quantify the uncertainty. This leads to unreliability in clinical settings where
@@ -24,8 +24,8 @@ labeled, correspondingly. Further, our approach is evaluated with an ablation
 study. Six distributions were benchmarked as our prior and posterior to assess
 their influence on convergence.
 
-
-Architecture:<br><br><br>
+<br><br><br>
+Architecture:
 
 
 ![hybrid bayesian model](https://github.com/user-attachments/assets/a94ed0c1-2848-4311-baec-e6dd566675f0)
