@@ -18,55 +18,6 @@ import datetime
 
 
 
-from google.colab import drive
-drive.mount('/content/drive')
-np.random.seed(0)
-df_analysis = pd.read_csv('/content/drive/My Drive/EpICC/sample_num.csv')
-df_rf_cancer = pd.read_csv('/content/drive/MyDrive/Bayesian Model/Supplementary Data/df_rf_cancer.csv')
-
-
-
-
-# Split & Augmention
-X = df_rf_cancer.iloc[:, :-1]
-y = df_rf_cancer.iloc[:, -1]
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-X_test, X_val, y_test, y_val = train_test_split(X_test, y_test, test_size=0.5, random_state=42)
-
-kmeans_smote = KMeansSMOTE(sampling_strategy='not majority', random_state=42, kmeans_estimator=31)
-X_resampled, y_resampled = kmeans_smote.fit_resample(X_train, y_train)
-
-X_train = X_resampled
-y_train = y_resampled
-
-
-# Normalization
-scaler = StandardScaler()
-scaler.fit(X_train)
-
-X_train = tf.convert_to_tensor(scaler.transform(X_train))
-X_val= tf.convert_to_tensor(scaler.transform(X_val))
-X_test= tf.convert_to_tensor(scaler.transform(X_test))
-
-# one-hot encode
-y_train_oh = tf.keras.utils.to_categorical(y_train)
-y_test_oh = tf.keras.utils.to_categorical(y_test)
-y_val_oh = tf.keras.utils.to_categorical(y_val)
-
-
-
-# Display the shape of the training and testing data
-print("Training shape:", X_train.shape)
-print("Training labels shape:", y_train.shape)
-print("y_train_oh shape:", y_train_oh.shape)
-
-print("Testing shape:", X_test.shape)
-print("Testing labels shape:", y_test.shape)
-print("y_test_oh shape:", y_test_oh.shape)
-
-
-
 
 MLP = Sequential([
     InputLayer(input_shape=(1000,)),
