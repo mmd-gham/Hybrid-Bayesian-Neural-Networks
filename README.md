@@ -9,7 +9,7 @@ Data:
 
 1000 features: https://drive.google.com/file/d/1_aFrfV6ldxosYn5e-xk54UpnPKQv4vtS/view?usp=sharing
 
-<br><br><br>
+<br><br>
 Abstract:
 
 Deep learning models for cancer detection with gene expression data do not
@@ -24,7 +24,7 @@ labeled, correspondingly. Further, our approach is evaluated with an ablation
 study. Six distributions were benchmarked as our prior and posterior to assess
 their influence on convergence.
 
-<br><br><br>
+<br><br>
 Architecture:
 
 
