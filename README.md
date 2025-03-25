@@ -1,5 +1,5 @@
 ## Hybrid Bayesian Neural Networks: Quantifying Uncertainty in Cancer detection
-<br><br><br>
+<br>
 
 Data: 
 
