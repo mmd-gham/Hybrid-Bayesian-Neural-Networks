@@ -17,7 +17,7 @@ quantify the uncertainty. This leads to unreliability in clinical settings where
 knowing the risks involved in detections is required for improved decision-
 making. To this end, we introduced a hybrid Bayesian neural network composed
 of multilayer perceptron and Bayesian layers to quantify uncertainty. Our hybrid
-approach proved effective in improving performance while quantifying aleatoric
+approach improved performance while quantifying aleatoric
 and epistemic uncertainty. Achieving an accuracy of 0.9624, and the total un-
 certainty having a mean of 1.133 and 0.271 bits for incorrectly and correctly
 labeled, correspondingly. Further, our approach is evaluated with an ablation
