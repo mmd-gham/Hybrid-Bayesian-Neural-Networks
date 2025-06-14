@@ -12,17 +12,7 @@ Data:
 <br><br>
 Abstract:
 
-Deep learning models for cancer detection with gene expression data do not
-quantify the uncertainty. This leads to unreliability in clinical settings where
-knowing the risks involved in detections is required for improved decision-
-making. To this end, we introduced a hybrid Bayesian neural network composed
-of multilayer perceptron and Bayesian layers to quantify uncertainty. Our hybrid
-approach improved performance while quantifying aleatoric
-and epistemic uncertainty. Achieving an accuracy of 0.9624, and the total un-
-certainty having a mean of 1.133 and 0.271 bits for incorrectly and correctly
-labeled, correspondingly. Further, our approach is evaluated with an ablation
-study. Six distributions were benchmarked as our prior and posterior to assess
-their influence on convergence.
+Most deep learning models for cancer detection using gene expression data do not quantify uncertainty. This results in unreliability in clinical settings, where understanding the risks associated with detection is crucial for informed decision-making. To address this, we introduce a hybrid Bayesian neural network composed of a multilayer perceptron and Bayesian layers to quantify uncertainty. Our hybrid approach quantifies both aleatoric and epistemic uncertainty, with total uncertainty averaging 1.133 and 0.271 entropy bits for misclassified and correctly classified samples, respectively. Additionally, our approach achieves high performance in terms of accuracy and recall, with a value of 0.9624.
 
 <br><br>
 Architecture:
