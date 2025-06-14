@@ -2,6 +2,7 @@ import tensorflow as tf
 from tf_keras.models import Sequential
 from tf_keras.layers import Dense, InputLayer, LayerNormalization
 from tf_keras.losses import SparseCategoricalCrossentropy
+import tensorflow.keras.backend as K
 from tf_keras.callbacks import TensorBoard, EarlyStopping
 from tf_keras.optimizers import Adam
 from tf_keras import regularizers
@@ -18,6 +19,10 @@ import datetime
 
 
 
+def nll(y_true, y_pred):
+    eps = 1e-10  # Prevent log(0)
+    return -K.mean(K.sum(y_true * K.log(y_pred + eps), axis=-1))
+
 
 MLP = Sequential([
     InputLayer(input_shape=(1000,)),
@@ -33,7 +38,7 @@ MLP = Sequential([
 ])
 
 
-MLP.compile(loss="categorical_crossentropy",
+MLP.compile(loss=nll,
               optimizer= Adam(0.0001),
               metrics=['accuracy'],
               experimental_run_tf_function=False)
